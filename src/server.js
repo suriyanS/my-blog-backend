@@ -1,59 +1,54 @@
 import express from "express";
+import { connectToDb, db } from "./db.js";
 
 const app = express();
 app.use(express.json());
 
-let articlesInfo = [
-  {
-    name: "learn-react",
-    upvotes: 0,
-    comments: [],
-  },
-  {
-    name: "learn-node",
-    upvotes: 0,
-    comments: [],
-  },
-  {
-    name: "mongodb",
-    upvotes: 0,
-    comments: [],
-  },
-];
-
-app.put("/api/articles/:name/upvote", (req, res) => {
+app.get("/api/articles/:name", async (req, res) => {
   const { name } = req.params;
-  let article = articlesInfo.find((article) => article.name === name);
+  const article = await db.collection("articles").findOne({ name });
   if (article) {
-    article.upvotes += 1;
-    res.send(`The ${name} article now has ${article.upvotes} upvotes`);
+    res.send(article);
+  } else {
+    res.sendStatus(404);
+  }
+});
+
+app.put("/api/articles/:name/upvote", async (req, res) => {
+  const { name } = req.params;
+  await db.collection("articles").updateOne({ name }, { $inc: { upvotes: 1 } });
+  const article = await db.collection("articles").findOne({ name });
+  if (article) {
+    res.send(article);
   } else {
     res.send("That article doesn't exist");
   }
 });
 
-app.post("/api/articles/:name/comments", (req, res) => {
+app.post("/api/articles/:name/comments", async (req, res) => {
   const { name } = req.params;
   const { postedBy, comment } = req.body;
-  let article = articlesInfo.find((article) => article.name === name);
+  await db
+    .collection("articles")
+    .updateOne({ name }, { $push: { comments: { postedBy, comment } } });
+  const article = await db.collection("articles").findOne({ name });
   if (article) {
-    article.comments.push({ postedBy, comment });
-    res.send(`"${comment}" - ${postedBy} commented on ${name} article`);
+    res.send(article);
   } else {
     res.send("That article doesn't exist");
   }
 });
 
-app.get("/api/articles/:name/comments", (req, res) => {
-  const { name } = req.params;
-  let article = articlesInfo.find((article) => article.name === name);
-  if (article) {
-    res.send(article.comments);
-  } else {
-    res.send("That article doesn't exist");
+async function startServer() {
+  try {
+    await connectToDb();
+    console.log("Successfully connected to the database!");
+    app.listen(8000, () => {
+      console.log("Server is listening on port 8000");
+    });
+  } catch (error) {
+    console.error("Error connecting to the database:", error);
   }
-});
+}
 
-app.listen(8000, () => {
-  console.log("Server is listening on port 8000");
-});
+startServer();
